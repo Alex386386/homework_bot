@@ -54,9 +54,7 @@ def send_message(bot, message: Optional[str]) -> None:
 
 
 def get_api_answer(timestamp: int) -> Optional[Dict]:
-    """Функция выполняющая запрос к эндпоинту
-    и возвращающая ответ в формате JSON.
-    """
+    """Функция выполняющая запрос и возвращающая ответ в формате JSON."""
     params = {'from_date': timestamp}
     try:
         homework_statuses = requests.get(
