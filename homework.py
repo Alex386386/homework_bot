@@ -54,8 +54,8 @@ def send_message(bot, message: Optional[str]) -> None:
 
 
 def get_api_answer(timestamp: int) -> Optional[Dict]:
-    """
-    Функция выполняющая запрос к эндпоинту и возвращающая ответ в формате JSON.
+    """Функция выполняющая запрос к эндпоинту
+    и возвращающая ответ в формате JSON.
     """
     params = {'from_date': timestamp}
     try:
@@ -88,9 +88,9 @@ def check_response(response: Dict) -> Dict:
 
 
 def parse_status(homework: Dict) -> Optional[str]:
-    """
-    Извлекает из ответа статус домашней работы и возвращает строку,
-    подготовленную для данного статуса в словаре HOMEWORK_VERDICTS.
+    """Извлекает из ответа статус домашней работы.
+    Возвращает строку, подготовленную для данного статуса
+    в словаре HOMEWORK_VERDICTS.
     """
     global condition
     if 'homework_name' not in homework:
