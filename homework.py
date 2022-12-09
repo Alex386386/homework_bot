@@ -8,6 +8,7 @@ from typing import Dict, Optional
 import requests
 import telegram
 from dotenv import load_dotenv
+from requests import RequestException
 
 load_dotenv()
 
@@ -60,7 +61,7 @@ def get_api_answer(timestamp: int) -> Optional[Dict]:
         homework_statuses = requests.get(
             ENDPOINT, headers=HEADERS, params=params)
         logging.debug('Попытка сделать запрос к API прошла успешно.')
-    except:
+    except RequestException:
         raise Exception('Попытка сделать запрос к API прошла неуспешно.')
     status_code = homework_statuses.status_code
     if status_code != HTTPStatus.OK:
@@ -75,11 +76,9 @@ def check_response(response: Dict) -> Dict:
         raise TypeError(
             'Структура данных ответа API не соответствует ожидаемым')
     homeworks = response.get('homeworks')
-    try:
-        expected_keys[0] in response and expected_keys[1] in response
-    except:
-        raise Exception(f'Ответ API не прошёл проверку '
-                        f'на соответствие документации.')
+    if expected_keys[0] not in response and expected_keys[1] not in response:
+        raise Exception('Ответ API не прошёл проверку '
+                        'на соответствие документации.')
     if type(homeworks) != list:
         raise TypeError('В ответе API под ключом "homeworks"'
                         ' находится несоответствующий тип данных!')
