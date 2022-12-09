@@ -44,9 +44,8 @@ def check_tokens() -> bool:
 
 def send_message(bot, message: Optional[str]) -> None:
     """Функция отправки любого сообщения(message) в чат (TELEGRAM_CHAT_ID)."""
-    if message is None:
-        return None
     try:
+        logging.debug('Попытка отправить сообщение в телеграмм.')
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logging.debug(f'Успешная отправка сообщения: {message}')
     except Exception as error:
@@ -57,11 +56,12 @@ def get_api_answer(timestamp: int) -> Optional[Dict]:
     """Функция выполняющая запрос и возвращающая ответ в формате JSON."""
     params = {'from_date': timestamp}
     try:
+        logging.debug('Попытка сделать запрос к API.')
         homework_statuses = requests.get(
             ENDPOINT, headers=HEADERS, params=params)
-    except Exception as error:
-        logging.error(f'Ошибка при запросе к основному API: {error}')
-        return
+        logging.debug('Попытка сделать запрос к API прошла успешно.')
+    except:
+        raise Exception('Попытка сделать запрос к API прошла неуспешно.')
     status_code = homework_statuses.status_code
     if status_code != HTTPStatus.OK:
         raise Exception(f'Статус код {status_code} != 200')
@@ -74,15 +74,16 @@ def check_response(response: Dict) -> Dict:
     if type(response) is not dict:
         raise TypeError(
             'Структура данных ответа API не соответствует ожидаемым')
-    if type(response.get('homeworks')) != list:
+    homeworks = response.get('homeworks')
+    try:
+        expected_keys[0] in response and expected_keys[1] in response
+    except:
+        raise Exception(f'Ответ API не прошёл проверку '
+                        f'на соответствие документации.')
+    if type(homeworks) != list:
         raise TypeError('В ответе API под ключом "homeworks"'
                         ' находится несоответствующий тип данных!')
-    try:
-        if expected_keys[0] in response and expected_keys[1] in response:
-            return response.get('homeworks')[0]
-    except Exception as error:
-        logging.error(f'Ответ API не прошёл проверку '
-                      f'на соответствие документации: {error}')
+    return homeworks[0]
 
 
 def parse_status(homework: Dict) -> Optional[str]:
@@ -91,28 +92,19 @@ def parse_status(homework: Dict) -> Optional[str]:
     в словаре HOMEWORK_VERDICTS.
     """
     global condition
-    if 'homework_name' not in homework:
-        raise Exception('В ответе API домашней работы нет названия!')
+    print(type(homework))
     homework_name = homework.get('homework_name')
-    verdict = homework.get('status')
-    if verdict not in HOMEWORK_VERDICTS:
-        logging.error('В API ответе обнаружен неожиданный статус')
-        raise Exception(
-            f'Статус домашней работы не соответствует документации{verdict}')
-    if condition == '':
-        condition = verdict
-        logging.debug(f'Изменился статус: {verdict}')
-        verdicts = HOMEWORK_VERDICTS[verdict]
-        return (f'Изменился статус проверки работы "{homework_name}".'
-                f' {verdicts}')
-    if verdict != condition:
-        condition = verdict
-        logging.debug(f'Изменился статус: {verdict}')
-        verdicts = HOMEWORK_VERDICTS[verdict]
-        return (f'Изменился статус проверки работы "{homework_name}".'
-                f' {verdicts}')
-    elif verdict == condition:
-        logging.debug(f'Статус работы не изменился: {verdict}')
+    homework_status = homework.get('status')
+    if 'homework_name' not in homework:
+        raise KeyError('В API ответе не обнаружен ключ homework_name')
+    if 'status' not in homework:
+        raise KeyError('В API ответе не обнаружен ключ homework_status')
+    if homework_status not in HOMEWORK_VERDICTS:
+        raise KeyError(
+            f'Статус домашней работы'
+            f' не соответствует документации: {homework_status}')
+    verdict = HOMEWORK_VERDICTS[homework_status]
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main() -> None:
@@ -123,18 +115,27 @@ def main() -> None:
         sys.exit(message)
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = (int(time.time())) - ONE_MONTH
+    error = None
+    test_message = None
     while True:
         try:
             answer = get_api_answer(timestamp)
             homework = check_response(answer)
-            message = parse_status(homework)
-            send_message(bot, message)
+            if homework:
+                message = parse_status(homework)
+                if message != test_message:
+                    send_message(bot, message)
+                    test_message = message
+            else:
+                logging.error('Переменная homework - пуста.')
+        except Exception as err:
+            message = f'Сбой в работе программы: {err}'
+            logging.error(message, exc_info=True)
+            if err != error:
+                send_message(bot, message)
+                error = err
+        finally:
             time.sleep(RETRY_PERIOD)
-            continue
-        except Exception as error:
-            message = f'Сбой в работе программы: {error}'
-            send_message(bot, message)
-            break
 
 
 if __name__ == '__main__':
