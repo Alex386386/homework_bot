@@ -3,7 +3,7 @@ import os
 import sys
 import time
 from http import HTTPStatus
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 import requests
 import telegram
@@ -28,14 +28,13 @@ logging.basicConfig(
 RETRY_PERIOD: int = 600
 ENDPOINT: str = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS: Dict[str, str] = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-ONE_MONTH: int = 2592000
+ONE_WEEK: int = 604800
 
 HOMEWORK_VERDICTS: Dict[str, str] = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
-condition: str = ''
 
 
 def check_tokens() -> bool:
@@ -69,20 +68,20 @@ def get_api_answer(timestamp: int) -> Optional[Dict]:
     return homework_statuses.json()
 
 
-def check_response(response: Dict) -> Dict:
+def check_response(response: Dict) -> List:
     """Функция проверки ответа от эндпоинта на соответствие документации."""
-    expected_keys = ['current_date', 'homeworks']
-    if type(response) is not dict:
+    if not isinstance(response, dict):
         raise TypeError(
             'Структура данных ответа API не соответствует ожидаемым')
     homeworks = response.get('homeworks')
-    if expected_keys[0] not in response and expected_keys[1] not in response:
-        raise Exception('Ответ API не прошёл проверку '
-                        'на соответствие документации.')
-    if type(homeworks) != list:
+    if 'homeworks' not in response:
+        raise KeyError('В словаре response нет ключа "homeworks"')
+    if 'current_date' not in response:
+        raise KeyError('В словаре response нет ключа "current_date"')
+    if not isinstance(homeworks, list):
         raise TypeError('В ответе API под ключом "homeworks"'
                         ' находится несоответствующий тип данных!')
-    return homeworks[0]
+    return homeworks
 
 
 def parse_status(homework: Dict) -> Optional[str]:
@@ -90,8 +89,6 @@ def parse_status(homework: Dict) -> Optional[str]:
     Возвращает строку, подготовленную для данного статуса
     в словаре HOMEWORK_VERDICTS.
     """
-    global condition
-    print(type(homework))
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if 'homework_name' not in homework:
@@ -113,18 +110,18 @@ def main() -> None:
         logging.critical(message)
         sys.exit(message)
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = (int(time.time())) - ONE_MONTH
+    timestamp = (int(time.time())) - ONE_WEEK
     error = None
-    test_message = None
+    previous_message = None
     while True:
         try:
             answer = get_api_answer(timestamp)
             homework = check_response(answer)
             if homework:
-                message = parse_status(homework)
-                if message != test_message:
+                message = parse_status(homework[0])
+                if message != previous_message:
                     send_message(bot, message)
-                    test_message = message
+                    previous_message = message
             else:
                 logging.error('Переменная homework - пуста.')
         except Exception as err:
